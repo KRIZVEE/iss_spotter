@@ -1,8 +1,5 @@
-const request = require('request')
-const url = 'https://api.ipify.org/?format=json';
-// let ip = '';
-let geoDet = {};
-let responseMsg = []
+const request = require('request');
+
 /**
  * Makes a single API request to retrieve the user's IP address.
  * Input:
@@ -11,20 +8,17 @@ let responseMsg = []
  *   - An error, if any (nullable)
  *   - The IP address as a string (null if error). Example: "162.245.144.188"
  */
-const fetchMyIP = function (callback) {
-  // use request to fetch IP address from JSON API
-
-  request(url, (error, response, body) => {
+const fetchMyIP = function(callback) {
+  request('https://api.ipify.org/?format=json', (error, response, body) => {
     if (error) return callback(error, null);
 
-    if ((response.statusCode !== 200)) {
+    if (response.statusCode !== 200) {
       callback(Error(`Status Code ${response.statusCode} when fetching IP: ${body}`), null);
       return;
     }
 
     const ip = JSON.parse(body).ip;
-    callback(null, ip)
-
+    callback(null, ip);
   });
 };
 
@@ -38,26 +32,24 @@ const fetchMyIP = function (callback) {
  *   - The lat and lng as an object (null if error). Example:
  *     { latitude: '49.27670', longitude: '-123.13000' }
  */
-const fetchCoordsByIP = function (ip, callback) {
-
+const fetchCoordsByIP = function(ip, callback) {
   request(`http://ip-api.com/json/${ip}`, (error, response, body) => {
     if (error) {
       callback(error, null);
-      return
-    }
-
-    if ((response.statusCode !== 200)) {
-      callback(Error(`Status Code ${response.statusCode} when fetching IP: ${body}`), null);
       return;
     }
 
-    geoDet['lat'] = JSON.parse(body).lat;
-    geoDet['lon'] = JSON.parse(body).lon
-    callback(null, geoDet);
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching Coordinates for IP: ${body}`), null);
+      return;
+    }
+    const obj = { latitude:'', longitude:'' }
+    obj.latitude = JSON.parse(body).lat;
+    obj.longitude = JSON.parse(body).lon;
 
+    callback(null, obj);
   });
-
-}
+};
 
 /**
  * Makes a single API request to retrieve upcoming ISS fly over times the for the given lat/lng coordinates.
@@ -70,33 +62,55 @@ const fetchCoordsByIP = function (ip, callback) {
  *     [ { risetime: 134564234, duration: 600 }, ... ]
  */
 const fetchISSFlyOverTimes = function(coords, callback) {
+  const url = `http://api.open-notify.org/iss-pass.json?lat=${coords.latitude}&lon=${coords.longitude}`;
 
-  // console.log('coords :',coords);
-  
-  request(`http://api.open-notify.org/iss-pass.json?lat=${coords.lat}&lon=${coords.lon}`,(error, response, body)=>{
-
-    // console.log('body : ',body);
-    if(error){
-      console.log('there is an error', error);
-      return
-    }
-    if(response.statusCode !== 200){
-      console.log(`Response Status Code is not ${response.statusCode}`);
+  request(url, (error, response, body) => {
+    if (error) {
+      callback(error, null);
       return;
     }
 
-    const responseMsg = JSON.parse(body).response;
-    callback(null, responseMsg);
-    // // geoDet['lat'] = JSON.parse(body).lat;
-    // for(let i = 0; i < JSON.parse(body).response.length; i++){
-    //   responseMsg.push(JSON.parse(body).response[i])
-    //   // console.log('response Msg is : ',responseMsg);
-    // }
-    // callback(null, responseMsg);
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching ISS pass times: ${body}`), null);
+      return;
+    }
 
-
-  })
+    const passes = JSON.parse(body).response;
+    callback(null, passes);
+  });
 };
 
+/**
+ * Orchestrates multiple API requests in order to determine the next 5 upcoming ISS fly overs for the user's current location.
+ * Input:
+ *   - A callback with an error or results.
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The fly-over times as an array (null if error):
+ *     [ { risetime: <number>, duration: <number> }, ... ]
+ */
+const nextISSTimesForMyLocation = function(callback) {
+  fetchMyIP((error, ip) => {
+    if (error) {
+      return callback(error, null);
+    }
 
-module.exports = { fetchMyIP, fetchCoordsByIP, fetchISSFlyOverTimes, responseMsg};
+    fetchCoordsByIP(ip, (error, loc) => {
+      if (error) {
+        return callback(error, null);
+      }
+
+      fetchISSFlyOverTimes(loc, (error, nextPasses) => {
+        if (error) {
+          return callback(error, null);
+        }
+
+        callback(null, nextPasses);
+      });
+    });
+  });
+};
+
+// Only export nextISSTimesForMyLocation and not the other three (API request) functions.
+// This is because they are not needed by external modules.
+module.exports = { nextISSTimesForMyLocation };
