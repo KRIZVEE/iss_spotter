@@ -2,6 +2,7 @@ const request = require('request')
 const url = 'https://api.ipify.org/?format=json';
 // let ip = '';
 let geoDet = {};
+let responseMsg = []
 /**
  * Makes a single API request to retrieve the user's IP address.
  * Input:
@@ -58,4 +59,44 @@ const fetchCoordsByIP = function (ip, callback) {
 
 }
 
-module.exports = { fetchMyIP, fetchCoordsByIP};
+/**
+ * Makes a single API request to retrieve upcoming ISS fly over times the for the given lat/lng coordinates.
+ * Input:
+ *   - An object with keys `latitude` and `longitude`
+ *   - A callback (to pass back an error or the array of resulting data)
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The fly over times as an array of objects (null if error). Example:
+ *     [ { risetime: 134564234, duration: 600 }, ... ]
+ */
+const fetchISSFlyOverTimes = function(coords, callback) {
+
+  // console.log('coords :',coords);
+  
+  request(`http://api.open-notify.org/iss-pass.json?lat=${coords.lat}&lon=${coords.lon}`,(error, response, body)=>{
+
+    // console.log('body : ',body);
+    if(error){
+      console.log('there is an error', error);
+      return
+    }
+    if(response.statusCode !== 200){
+      console.log(`Response Status Code is not ${response.statusCode}`);
+      return;
+    }
+
+    const responseMsg = JSON.parse(body).response;
+    callback(null, responseMsg);
+    // // geoDet['lat'] = JSON.parse(body).lat;
+    // for(let i = 0; i < JSON.parse(body).response.length; i++){
+    //   responseMsg.push(JSON.parse(body).response[i])
+    //   // console.log('response Msg is : ',responseMsg);
+    // }
+    // callback(null, responseMsg);
+
+
+  })
+};
+
+
+module.exports = { fetchMyIP, fetchCoordsByIP, fetchISSFlyOverTimes, responseMsg};
